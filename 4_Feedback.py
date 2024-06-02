@@ -87,7 +87,7 @@ for i in range(len(t) - 1):
 plt.figure('Линеаризация с обратной связью')
 plt.xlabel('Время')
 plt.ylabel('')
-plt.plot(x, y21, x, y22)
+plt.plot(t, y21, t, y22)
 plt.legend(['Положение', 'Скорость'])
 plt.axhline(y = 0, color='gray')
 plt.axvline(x = 0, color='gray')
