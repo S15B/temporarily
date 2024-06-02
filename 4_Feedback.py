@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from scipy.integrate import odeint
 from scipy.optimize import minimize
 
-target_angle = np.pi/4   # нужный угол
+#target_angle = np.pi/4   # нужный угол
 dt = 1/240      # pybullet simulation step    
 physicsClient = p.connect(p.DIRECT) # or p.DIRECT for non-graphical version (GUI)
 p.setAdditionalSearchPath(pybullet_data.getDataPath())
@@ -21,51 +21,74 @@ p.changeDynamics(boxId, 2, linearDamping=0, angularDamping=0)
 # Модель уравнения маятника
 k = [1.56249828, 12.499986]
 def f(y, x):
-    return np.array([y[1], -k[0] * y[1] - k[1] * np.sin(y[0])])
+    return np.array([y[1], - k[0] * y[1] - k[1] * np.sin(y[0])])
 
-T = 2400
+T = 240
 
-def simulation (K):
-    # go to the starting position
-    p.setJointMotorControl2(bodyIndex=boxId, jointIndex=1, targetPosition=target_angle, controlMode=p.POSITION_CONTROL)
-    for _ in range(1000):
-        p.stepSimulation()
+# go to the starting position
+p.setJointMotorControl2(bodyIndex=boxId, jointIndex=1, targetPosition=np.pi/4, controlMode=p.POSITION_CONTROL)
+for _ in range(1000):
+    p.stepSimulation()
 
-    # turn off the motor for the free motion
-    p.setJointMotorControl2(bodyIndex=boxId, jointIndex=1, targetVelocity=0, controlMode=p.VELOCITY_CONTROL, force=0)
-    
-    t, theta, omega = [0], np.array([0]), np.array([0])
-    for i in range (1, T):
-        p.stepSimulation()
-        u = - K[0] * theta[-1] - K[1] * omega[-1]
-        tau = k[0] * omega[-1] + k[1] * np.sin(theta[-1]) + u
-        p.setJointMotorControl2(bodyIndex=boxId, jointIndex=1, controlMode=p.TORQUE_CONTROL, force=tau)
-        theta = np.append(theta, p.getJointState(boxId, 1)[0])
-        omega = np.append(omega, p.getJointState(boxId, 1)[1])
-        t.append(i * dt)
-    
-    return t, theta
+# turn off the motor for the free motion
+p.setJointMotorControl2(bodyIndex=boxId, jointIndex=1, targetVelocity=0, controlMode=p.VELOCITY_CONTROL, force=0)
 
-def error_search(K):    # Функционал, который нужно минимизировать
-    theta = simulation(K)[1]
-    return sum(list(map(lambda i: (theta[i] - target_angle)**2, range(len(theta)))))
-
-res = minimize(error_search, x0 = [1, 1])
-t, theta = simulation (res.x)
+tau = 0
+t, acceler = [0], np.array([0])
+theta, omega = np.array([p.getJointState(boxId, 1)[0]]), np.array([p.getJointState(boxId, 1)[1]])
+for i in range (1, T):
+    p.stepSimulation()
+    #time.sleep(dt)
+    u = 0.1
+    tau = k[0] * omega[-1] + k[1] * np.sin(theta[-1]) + u
+    p.setJointMotorControl2(bodyIndex=boxId, jointIndex=1, controlMode=p.TORQUE_CONTROL, force=tau)
+    theta = np.append(theta, p.getJointState(boxId, 1)[0])
+    omega = np.append(omega, p.getJointState(boxId, 1)[1])
+    acceler = np.append(acceler, (omega[-1] - omega[-2])/dt)
+    t.append(i * dt)
 p.disconnect()
 
-plt.figure('LQR')
-plt.title('Остановка в положение {0}'.format(round(target_angle, 4)))
+y0 = [[0, 0]]
+
+# Метод Эйлера c подставленным tau
+def euler(end):
+    h = dt
+    u = 0.1
+    tau = 0
+    t, y = [0], y0
+    while t[-1] < end - h:
+        t.append(t[-1] + h)
+        tau = k[0] * y[-1][1] + k[1] * np.sin(y[-1][0])
+        y.append([0, y[-1][1] + h * f(y[-1], t[-1])[1]])
+        y[-1][0] = (y[-2][0] + h * f([y[-2][0], y[-1][1]], t[-1])[0])
+        y[-1][0] -= tau + u
+        
+    tau = k[0] * y[-1][1] + k[1] * np.sin(y[-1][0])
+    h = end - t[-1]
+    t.append(end)
+    y.append([0, y[-1][1] + h * f(y[-1], t[-1])[1]])
+    y[-1][0] = (y[-2][0] + h * f([y[-2][0], y[-1][1]], t[-1])[0])
+    y[-1][0] -= tau + u
+    return t, y
+
+[x, y1] = euler(t[-1])
+y11 = np.array(list(map(lambda i: y1[i][0], range(len(y1))))) 
+y12 = np.array(list(map(lambda i: y1[i][1], range(len(y1))))) 
+
+y21, y22 = [0], [0]
+for i in range(len(t) - 1):
+    y2 = odeint(f, [y21[-1], y22[-1]], [t[i], t[i + 1]])
+    y21.append(y2[-1][0]) # Угол
+    y22.append(y2[-1][1]) # Скорость
+    tau = k[0] * y22[-1] + k[1] * np.sin(y21[-1])
+    y21[-1] -= tau + u
+
+
+plt.figure('Линеаризация с обратной связью')
 plt.xlabel('Время')
 plt.ylabel('')
-plt.plot(t, theta)
-plt.axhline(y = target_angle, color='yellow', linestyle='dashed')
-plt.legend(['Положение', 'Нужный угол'])
+plt.plot(x, y21, x, y22)
+plt.legend(['Положение', 'Скорость'])
 plt.axhline(y = 0, color='gray')
 plt.axvline(x = 0, color='gray')
 plt.show()
-
-print ('Коэффициенты K', res.x)
-
-
-
