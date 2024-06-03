@@ -20,8 +20,8 @@ p.changeDynamics(boxId, 2, linearDamping=0, angularDamping=0)
 
 # Модель уравнения маятника
 k = [1.56249828, 12.499986]
-def f(y, x):
-    return np.array([y[1], - k[0] * y[1] - k[1] * np.sin(y[0])])
+def f(y, x, tau):
+    return np.array([y[1], - k[0] * y[1] - k[1] * np.sin(y[0]) + tau])
 
 # go to the starting position
 p.setJointMotorControl2(bodyIndex=boxId, jointIndex=1, targetPosition=0, controlMode=p.POSITION_CONTROL)
@@ -48,40 +48,40 @@ for i in range (1, T):
     t.append(i * dt)
 p.disconnect()
 
-y0 = [[0, 0]]
-# Метод Эйлера c подставленным tau
-def euler(end):
-    h = dt
-    u = 0.1
-    tau = 0
-    t, y = [0], y0
-    while t[-1] < end - h:
-        t.append(t[-1] + h)
-        tau = k[0] * y[-1][1] + k[1] * np.sin(y[-1][0])
-        y.append([0, y[-1][1] + h * f(y[-1], t[-1])[1]])
-        y[-1][0] = (y[-2][0] + h * f([y[-2][0], y[-1][1]], t[-1])[0])
-        y[-1][0] -= tau + u
+# y0 = [[0, 0]]
+# # Метод Эйлера c подставленным tau
+# def euler(end):
+#     h = dt
+#     u = 0.1
+#     tau = 0
+#     t, y = [0], y0
+#     while t[-1] < end - h:
+#         t.append(t[-1] + h)
+#         tau = k[0] * y[-1][1] + k[1] * np.sin(y[-1][0])
+#         y.append([0, y[-1][1] + h * f(y[-1], t[-1])[1]])
+#         y[-1][0] = (y[-2][0] + h * f([y[-2][0], y[-1][1]], t[-1])[0])
+#         y[-1][0] -= tau + u
         
-    tau = k[0] * y[-1][1] + k[1] * np.sin(y[-1][0])
-    h = end - t[-1]
-    t.append(end)
-    y.append([0, y[-1][1] + h * f(y[-1], t[-1])[1]])
-    y[-1][0] = (y[-2][0] + h * f([y[-2][0], y[-1][1]], t[-1])[0])
-    y[-1][0] -= tau + u
-    return t, y
+#     tau = k[0] * y[-1][1] + k[1] * np.sin(y[-1][0])
+#     h = end - t[-1]
+#     t.append(end)
+#     y.append([0, y[-1][1] + h * f(y[-1], t[-1])[1]])
+#     y[-1][0] = (y[-2][0] + h * f([y[-2][0], y[-1][1]], t[-1])[0])
+#     y[-1][0] -= tau + u
+#     return t, y
 
-[x, y1] = euler(t[-1])
-y11 = np.array(list(map(lambda i: y1[i][0], range(len(y1))))) 
-y12 = np.array(list(map(lambda i: y1[i][1], range(len(y1))))) 
+# [x, y1] = euler(t[-1])
+# y11 = np.array(list(map(lambda i: y1[i][0], range(len(y1))))) 
+# y12 = np.array(list(map(lambda i: y1[i][1], range(len(y1))))) 
 
 # odeint c tau
 y21, y22 = [0], [0]
 for i in range(len(t) - 1):
-    y2 = odeint(f, [y21[-1], y22[-1]], [t[i], t[i + 1]])
+    tau = k[0] * y22[-1] + k[1] * np.sin(y21[-1]) + u
+    y2 = odeint(f, [y21[-1], y22[-1]], [t[i], t[i + 1]], args=(tau,))
     y21.append(y2[-1][0]) # Угол
     y22.append(y2[-1][1]) # Скорость
-    tau = k[0] * y22[-1] + k[1] * np.sin(y21[-1])
-    y21[-1] -= tau + u
+
 
 
 plt.figure('Линеаризация Симуляция Pybullet')
