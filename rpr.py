@@ -77,8 +77,10 @@ constraint_id = p.createConstraint(
     childFramePosition=[0, 0, 0]  
 )
 
-#p.changeDynamics(anchor_id_1, 1, linearDamping=0, angularDamping=0)
-#p.changeDynamics(constraint_id, 1, linearDamping=0, angularDamping=0)
+p.changeDynamics(anchor_id_1, 0, linearDamping=0, angularDamping=0)
+p.changeDynamics(anchor_id_2, 0, linearDamping=0, angularDamping=0)
+p.changeDynamics(anchor_id_1, 1, linearDamping=0, angularDamping=0)
+p.changeDynamics(constraint_id, 1, linearDamping=0, angularDamping=0)
 
 for i in range(10000):
     p.setJointMotorControl2(anchor_id_1, 0, controlMode=p.VELOCITY_CONTROL, targetVelocity=-1, force=10)
